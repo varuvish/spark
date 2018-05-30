@@ -137,6 +137,7 @@ class DataFrameReaderWriterSuite extends QueryTest with SharedSQLContext with Be
   private val textSchema = new StructType().add("value", StringType)
   private val data = Seq("1", "2", "3")
   private val dir = Utils.createTempDir(namePrefix = "input").getCanonicalPath
+  private val output = Utils.createTempDir(namePrefix = "output").getCanonicalPath
 
   before {
     Utils.deleteRecursively(new File(dir))
@@ -172,7 +173,6 @@ class DataFrameReaderWriterSuite extends QueryTest with SharedSQLContext with Be
       .format("org.apache.spark.sql.test.DefaultSourceWithoutUserSpecifiedSchema")
       .save()
   }
-
   test("resolve full class") {
     spark.read
       .format("org.apache.spark.sql.test.DefaultSource")
@@ -459,6 +459,21 @@ class DataFrameReaderWriterSuite extends QueryTest with SharedSQLContext with Be
     testRead(spark.read.schema(userSchema).json(dir), expData, userSchema)
     testRead(spark.read.schema(userSchema).json(dir, dir), expData ++ expData, userSchema)
     testRead(spark.read.schema(userSchema).json(Seq(dir, dir): _*), expData ++ expData, userSchema)
+  }
+
+  test("Random") {
+    spark.createDataset(data).toDF("str").write.mode(SaveMode.Overwrite).json(dir)
+    val df = spark.read.json(dir)
+    val repartitioned = df.repartition(200)
+    assert(repartitioned.rdd.getNumPartitions == 200)
+    repartitioned.write.json("/Users/vvishwanatha/temp-dir3")
+
+    // verify that there are no empty file
+    for (file <- new java.io.File("/Users/vvishwanatha/temp-dir3").listFiles) {
+        assert(file.length != 0)
+    }
+
+
   }
 
   test("parquet - API and behavior regarding schema") {
